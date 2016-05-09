@@ -11,6 +11,10 @@ func TestSimplejson(t *testing.T) {
 	var ok bool
 	var err error
 
+	jsm := NewFromMap(map[string]interface{}{"one": 1})
+
+	assert.Equal(t, 1, jsm.GetPath("one").MustInt())
+
 	js, err := NewJson([]byte(`{
 		"test": {
 			"string_array": ["asdf", "ghjk", "zxcv"],

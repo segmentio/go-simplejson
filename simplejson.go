@@ -33,6 +33,14 @@ func New() *Json {
 	}
 }
 
+// NewFromMap returns a pointer to a new `Json` object
+// from the map given as input
+func NewFromMap(m map[string]interface{}) *Json {
+	return &Json{
+		data: m,
+	}
+}
+
 // Interface returns the underlying data
 func (j *Json) Interface() interface{} {
 	return j.data
