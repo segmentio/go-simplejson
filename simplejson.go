@@ -8,7 +8,7 @@ import (
 
 // returns the current implementation version
 func Version() string {
-	return "0.5.0-alpha"
+	return "0.5.0"
 }
 
 type Json struct {
@@ -24,6 +24,18 @@ func NewJson(body []byte) (*Json, error) {
 		return nil, err
 	}
 	return j, nil
+}
+
+// New returns a pointer to a new, empty `Json` object
+func New() *Json {
+	return &Json{
+		data: make(map[string]interface{}),
+	}
+}
+
+// Interface returns the underlying data
+func (j *Json) Interface() interface{} {
+	return j.data
 }
 
 // Encode returns its marshaled data as `[]byte`
@@ -49,6 +61,45 @@ func (j *Json) Set(key string, val interface{}) {
 		return
 	}
 	m[key] = val
+}
+
+// SetPath modifies `Json`, recursively checking/creating map keys for the supplied path,
+// and then finally writing in the value
+func (j *Json) SetPath(branch []string, val interface{}) {
+	if len(branch) == 0 {
+		j.data = val
+		return
+	}
+
+	// in order to insert our branch, we need map[string]interface{}
+	if _, ok := (j.data).(map[string]interface{}); !ok {
+		// have to replace with something suitable
+		j.data = make(map[string]interface{})
+	}
+	curr := j.data.(map[string]interface{})
+
+	for i := 0; i < len(branch)-1; i++ {
+		b := branch[i]
+		// key exists?
+		if _, ok := curr[b]; !ok {
+			n := make(map[string]interface{})
+			curr[b] = n
+			curr = n
+			continue
+		}
+
+		// make sure the value is the right sort of thing
+		if _, ok := curr[b].(map[string]interface{}); !ok {
+			// have to replace with something suitable
+			n := make(map[string]interface{})
+			curr[b] = n
+		}
+
+		curr = curr[b].(map[string]interface{})
+	}
+
+	// add remaining k/v
+	curr[branch[len(branch)-1]] = val
 }
 
 // Del modifies `Json` map by deleting `key` if it is present.
@@ -81,16 +132,8 @@ func (j *Json) Get(key string) *Json {
 //   js.GetPath("top_level", "dict")
 func (j *Json) GetPath(branch ...string) *Json {
 	jin := j
-	for i := range branch {
-		m, err := jin.Map()
-		if err != nil {
-			return &Json{nil}
-		}
-		if val, ok := m[branch[i]]; ok {
-			jin = &Json{val}
-		} else {
-			return &Json{nil}
-		}
+	for _, p := range branch {
+		jin = jin.Get(p)
 	}
 	return jin
 }
@@ -176,6 +219,10 @@ func (j *Json) StringArray() ([]string, error) {
 	}
 	retArr := make([]string, 0, len(arr))
 	for _, a := range arr {
+		if a == nil {
+			retArr = append(retArr, "")
+			continue
+		}
 		s, ok := a.(string)
 		if !ok {
 			return nil, err
@@ -253,6 +300,31 @@ func (j *Json) MustString(args ...string) string {
 	s, err := j.String()
 	if err == nil {
 		return s
+	}
+
+	return def
+}
+
+// MustStringArray guarantees the return of a `[]string` (with optional default)
+//
+// useful when you want to interate over array values in a succinct manner:
+//		for i, s := range js.Get("results").MustStringArray() {
+//			fmt.Println(i, s)
+//		}
+func (j *Json) MustStringArray(args ...[]string) []string {
+	var def []string
+
+	switch len(args) {
+	case 0:
+	case 1:
+		def = args[0]
+	default:
+		log.Panicf("MustStringArray() received too many arguments %d", len(args))
+	}
+
+	a, err := j.StringArray()
+	if err == nil {
+		return a
 	}
 
 	return def
